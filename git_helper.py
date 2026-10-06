@@ -4,7 +4,6 @@ import sys
 
 
 def run_command(command, error_msg="Komut calistirilirken hata olustu."):
-    """Sistem komutunu calistirir ve hata kontrolu yapar."""
     result = subprocess.run(
         command, shell=True, text=True, capture_output=True
     )
@@ -16,7 +15,6 @@ def run_command(command, error_msg="Komut calistirilirken hata olustu."):
 
 
 def check_git_installed():
-    """Git'in sistemde kurulu olup olmadigini denetler."""
     success, _ = run_command(
         "git --version", "Sisteminizde Git kurulu gorunmuyor."
     )
@@ -26,26 +24,40 @@ def check_git_installed():
 
 
 def is_git_repo():
-    """Bulunulan klasorun bir Git deposu olup olmadigini kontrol eder."""
     return os.path.exists(".git")
 
 
 def get_current_branch():
-    """Aktif dalin (branch) adini dondurur."""
     success, stdout = run_command("git branch --show-current")
     if success and stdout.strip():
         return stdout.strip()
     return "main"
 
 
+def check_or_setup_remote():
+    success, stdout = run_command("git remote get-url origin")
+    if not success or not stdout.strip():
+        print(
+            "\n[!] Bu depoda GitHub baglantisi (origin) tanimli gorunmuyor."
+        )
+        url = input(
+            "GitHub Repository URL'sini girin (orn: https://github.com/kullanici/repo.git): "
+        ).strip()
+        if not url:
+            print("URL girilmedi, islem iptal edildi.")
+            return False
+        run_command(
+            f"git remote add origin {url}", "Origin eklenirken hata olustu."
+        )
+        print(f"[+] Remote origin basariyla eklendi: {url}")
+    return True
+
+
 def select_project_directory():
-    """Kullanicidan hedef proje klasorunu alir ve o dizine gecer."""
     while True:
         path = input(
             "\nProje klasorunun yolunu girin (Bulundugunuz klasor icin Enter): "
         ).strip()
-
-        # Terminalde surukle-birak yapildiginda olusan tirnaklari temizle
         path = path.strip("\"'")
 
         if not path:
@@ -61,7 +73,6 @@ def select_project_directory():
 
 
 def setup_new_repo():
-    """Yeni projeyi GitHub'a ilk kez baglayip yukler."""
     print("\n==========================================")
     print("      Yeni Proje Yukleme (Ilk Kurulum)    ")
     print("==========================================")
@@ -76,13 +87,12 @@ def setup_new_repo():
         print("[i] Bu klasorde zaten bir Git deposu mevcut.")
 
     remote_url = input(
-        "\nGitHub Repository URL'sini girin (orn: https://github.com/kullanici/repo.git): "
+        "\nGitHub Repository URL'sini girin: "
     ).strip()
     if not remote_url:
         print("Gecerli bir URL girilmedi, islem iptal edildi.")
         return
 
-    # Remote origin guncelleme
     run_command("git remote remove origin")
     success, _ = run_command(
         f"git remote add origin {remote_url}", "Remote origin eklenemedi."
@@ -115,7 +125,6 @@ def setup_new_repo():
 
 
 def update_existing_repo():
-    """Mevcut depodaki degisiklikleri GitHub'a pushlar."""
     print("\n==========================================")
     print("         Mevcut Projeyi Guncelleme        ")
     print("==========================================")
@@ -127,10 +136,11 @@ def update_existing_repo():
         print(
             "\n[!] HATA: Secilen klasorde bir Git deposu (.git) bulunamadi!"
         )
-        print("    Eger bu yeni bir projeyse ana menuden 1. secenegi kullanin.")
         return
 
-    # Degisiklik kontrolu
+    if not check_or_setup_remote():
+        return
+
     _, status = run_command("git status --short")
     if not status.strip():
         print("\n[i] Herhangi bir degisiklik tespit edilmedi. Calisma alani temiz.")
@@ -158,12 +168,12 @@ def update_existing_repo():
 
     pull_choice = (
         input(
-            "Push oncesi uzak depodan cekme (git pull) yapilsin mi? (e/h, Varsayilan: e): "
+            "Push oncesi uzak depodan cekme (git pull) yapilsin mi? (e/h, Varsayilan: h): "
         )
         .strip()
         .lower()
     )
-    if pull_choice != "h":
+    if pull_choice == "e":
         print("[+] Guncellemeler kontrol ediliyor (git pull)...")
         run_command(
             f"git pull origin {branch_name} --rebase",
